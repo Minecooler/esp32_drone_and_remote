@@ -72,4 +72,4 @@ The system uses a **Double PID** loop to translate stick angles into motor thrus
 ## ⚠️ Safety Information
 * **Propellers:** Always remove propellers during ESC and sensor calibration.
 * **Arming:** The system requires an arming signal and checks for low throttle before spinning motors.
-* **Environment:** Given last year's event had 500 spectators, ensure you test in a controlled, clear area.
+* **Environment:** Ensure you test in a controlled, clear area.
