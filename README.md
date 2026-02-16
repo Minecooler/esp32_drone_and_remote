@@ -1,122 +1,78 @@
-# esp32_drone_and_remote
-🚁 Drone & Remote System Overview
-This project consists of a quadcopter flight controller and a dedicated remote controller, both powered by ESP32 microcontrollers communicating via the ESP-NOW protocol. The system features a double-PID control loop (Angle + Rate) for stable flight and an integrated OLED feedback system on the remote.
+# ESP32 Drone & Remote Control System
 
-🔌 Hardware Connections
-Drone (Flight Controller)
-MCU: ESP32
+[cite_start]This project is a high-performance quadcopter system utilizing **ESP-NOW** for low-latency communication[cite: 1, 115]. [cite_start]It features a dual-PID control architecture (Angle + Rate) and a custom remote controller with OLED telemetry and logarithmic stick mapping[cite: 1, 172, 173].
 
+---
 
-Sensors: L3G Gyro, LSM303 Accel/Mag (connected via I2C) 
-+1
+## 🛠 Hardware Configuration
 
-Motors (Quad-X):
+### Remote Controller Wiring
+[cite_start]The remote uses a 12-bit ADC resolution (0..4095) for precise stick input[cite: 6, 7].
 
+| Component | ESP32 Pin | Notes |
+| :--- | :--- | :--- |
+| **OLED SDA** | [cite_start]GPIO 21 [cite: 1, 6] | I2C Data |
+| **OLED SCL** | [cite_start]GPIO 22 [cite: 1, 6] | [cite_start]I2C Clock (400kHz) [cite: 36] |
+| **Joystick X** | [cite_start]GPIO 35 [cite: 2] | Roll axis |
+| **Joystick Y** | [cite_start]GPIO 34 [cite: 2] | Pitch axis |
+| **Joystick Button** | [cite_start]GPIO 32 [cite: 2] | Digital Input |
+| **Throttle Pot** | [cite_start]GPIO 39 [cite: 2] | Optional analog throttle |
+| **Yaw Pot** | [cite_start]GPIO 36 [cite: 2] | Optional analog yaw |
 
-FL (Front-Left): GPIO 33 
-+1
-
-
-FR (Front-Right): GPIO 25 
-
-
-BL (Back-Left): GPIO 32 
-
-
-BR (Back-Right): GPIO 4 
-
-Remote Controller
-MCU: ESP32
+### Drone (Flight Controller) Wiring
+[cite_start]The motors follow a **Quad-X** configuration with specific PWM limits[cite: 87, 112].
 
 
-Display: SSD1306/SH1106 OLED (128x64) 
-+2
+
+| Motor | ESP32 Pin | Rotation |
+| :--- | :--- | :--- |
+| **Front-Left (FL)** | [cite_start]GPIO 33 [cite: 83] | [cite_start]CW [cite: 112] |
+| **Front-Right (FR)** | [cite_start]GPIO 25 [cite: 84] | [cite_start]CCW [cite: 112] |
+| **Back-Left (BL)** | [cite_start]GPIO 32 [cite: 84] | [cite_start]CCW [cite: 112] |
+| **Back-Right (BR)** | [cite_start]GPIO 4 [cite: 84] | [cite_start]CW [cite: 112] |
+
+---
+
+## 🚀 Setup & Calibration
+
+### 1. Remote Preparation
+* [cite_start]**MAC Address:** Upon boot, the remote prints its MAC address to the Serial Monitor[cite: 44, 45]. [cite_start]Ensure this matches the `remoteMac` defined in the flight controller code[cite: 115].
+* [cite_start]**Joystick Calibration:** On the first run, the system calibrates centers and saves them to preferences[cite: 21, 28, 37]. [cite_start]To force recalibration, hold the joystick button while powering on[cite: 42, 43].
+* **Curve Tuning:** Stick sensitivity is refined via logarithmic mapping:
+    * [cite_start]`LOG_K_JOY`: 3.0 (Roll/Pitch)[cite: 5, 54].
+    * [cite_start]`LOG_K_YAW`: 4.0[cite: 5, 68].
+    * [cite_start]`LOG_K_THR`: 6.0[cite: 5].
+
+### 2. Drone Sensor Calibration
+[cite_start]Access the Serial menu (115200 baud) and use the following commands[cite: 177]:
+* [cite_start]**`g`**: Calibrate Gyro (Keep the board perfectly still)[cite: 132, 178].
+* [cite_start]**`a`**: 6-position Accelerometer calibration[cite: 137, 179].
+* [cite_start]**`m`**: Magnetometer calibration (20-second rotation window)[cite: 151, 152, 180].
+* [cite_start]**`p`**: Print current calibration values to Serial[cite: 125, 182].
+
+### 3. ESC Calibration Handshake
+[cite_start]The flight controller uses a state machine to define throttle limits (920µs to 2120µs)[cite: 87, 189]:
+1. [cite_start]**Low Trigger:** Hold throttle below 15% (`THR_SIG_LOW`) to initiate[cite: 90, 190].
+2. [cite_start]**High Trigger:** Push throttle above 85% (`THR_SIG_HIGH`) within 10 seconds[cite: 90, 93, 193].
+3. [cite_start]**Pulse:** The controller sends a 4-second calibration pulse (`ESC_MAX_US`) to all motors[cite: 91, 195].
+4. [cite_start]**Completion:** Once `ESC_CAL_DONE` is reached, normal flight is enabled[cite: 198].
+
+---
+
+## 🎮 Flight Control Logic
+
+[cite_start]The system uses a **Double PID** loop to translate stick angles into motor thrust[cite: 172, 173].
 
 
-Inputs: * Joystick X: GPIO 35 
 
+* [cite_start]**Angle PID (Outer):** Converts desired angle into a target rotation rate[cite: 219, 220].
+* [cite_start]**Rate PID (Inner):** Converts target rate into motor PWM offsets, capped at ±300µs[cite: 173, 222].
+* [cite_start]**Refresh Rate:** The remote sends RC packets at ~40Hz (every 25ms)[cite: 11, 71].
+* [cite_start]**Failsafe:** Motors are immediately stopped if the RC signal is lost for more than 200ms[cite: 88, 209].
 
-Joystick Y: GPIO 34 
+---
 
-
-Button: GPIO 32 
-
-
-Throttle Pot: GPIO 39 
-
-
-Yaw Pot: GPIO 36 
-
-🛠️ Setup & Installation
-1. Flight Controller Setup
-Open DoublePID_FlightController.ino in the Arduino IDE.
-
-Ensure you have the following libraries installed:
-
-L3G, LSM303, SensorFusion, Preferences.
-
-
-Check MAC Address: Ensure the remoteMac in the drone code  matches the MAC address of your remote ESP32 (printed to Serial upon remote boot).
-
-Upload the code to the drone's ESP32.
-
-2. Remote Controller Setup
-Open Remote_ESP32_HU_M16_OLED.ino.
-
-Ensure you have U8g2, Adafruit_GFX, and Adafruit_SSD1306 libraries.
-
-The remote uses I2C pins 21 (SDA) and 22 (SCL) for the OLED.
-+1
-
-Upload the code to the remote's ESP32.
-
-🚀 Startup & Calibration
-Sensor Calibration (Drone)
-When connected to USB, use the Serial Monitor (115200 baud) to access the calibration menu:
-
-
-'g': Calibrate Gyro (keep board perfectly still).
-+1
-
-
-'a': 6-position Accelerometer calibration.
-+1
-
-
-'m': Magnetometer calibration (rotate in all axes).
-+1
-
-
-'s': Start the main flight loop.
-
-Joystick Calibration (Remote)
-Calibration is performed on the first boot and saved to memory.
-+1
-
-
-Force Recalibration: Hold the joystick button while powering on the remote.
-
-ESC Calibration Handshake
-To calibrate your ESCs via the remote:
-
-Power on the drone and remote.
-
-
-Low Throttle: Pull the throttle stick to the bottom (< 15%).
-
-
-High Throttle: Push the throttle stick to the top (> 85%) within 10 seconds.
-
-The drone will send a 4-second high pulse followed by a low pulse to set the ESC range (920µs - 2120µs).
-+1
-
-⚠️ Safety Warnings
-Props Off: Always perform calibrations and initial tests with the propellers removed.
-
-
-Failsafe: The drone is programmed to stop motors if the RC signal is lost for more than 200ms.
-+2
-
-
-Arming: By default, the drone requires an "Armed" signal from the remote to spin the motors.
-+1
+## ⚠️ Safety Information
+* [cite_start]**Propellers:** Always remove propellers during ESC and sensor calibration[cite: 183].
+* [cite_start]**Arming:** The system requires the arm flag to be active and follows safety checks before spinning motors[cite: 10, 50, 216].
+* **Spectators:** Last year's competition had 500 spectators; always maintain a safe distance during operation.
